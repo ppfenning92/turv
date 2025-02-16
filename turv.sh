@@ -42,12 +42,14 @@ for cmd in "$CONFIG_TOOL" rg bat glow; do
     _error "Missing required command: $cmd"
     return 1
   }
+
+  _debug "All requirements exist"
 done
 
 mkdir -p "$(dirname "$TURV_APPROVAL_FILE")"
-if [ ! -f "$TURV_APPROVAL_FILE" ]; then
+if [[ ! -f "$TURV_APPROVAL_FILE" ]]; then
   case "$TURV_CONFIG_FORMAT" in
-  json) echo '{}' >"$TURV_APPROVAL_FILE" ;;
+  json) echo '{"approved_dirs": {}}' >"$TURV_APPROVAL_FILE" ;;
   yaml) echo "approved_dirs: {}" >"$TURV_APPROVAL_FILE" ;;
   toml)
     _error "toml not supported at this moment"
@@ -60,30 +62,65 @@ _call_func() {
   declare -f -F "$1" &>/dev/null && "$1"
 }
 
-_should_ask_to_load() {
+_set_approval() {
+  local dir="${1}"
+  local hash="${2}"
+  local approval=${3:-"false"}
+
+  local state="{\"approved\": \"$approval\", \"hash\": \"$hash\"}"
+  local jsonQuery=".approved_dirs[\"$dir\"] = $state"
+
+  local tmp_file="${TURV_APPROVAL_FILE}.tmp"
+
+  $CONFIG_TOOL "$jsonQuery" "$TURV_APPROVAL_FILE" \
+    "$TURV_APPROVAL_FILE" >"$tmp_file" && mv "$tmp_file" "$TURV_APPROVAL_FILE"
+
+}
+
+_get_approval_state() {
+  local dir="${1}"
+  local jsonQuery=".approved_dirs[\"$dir\"].approval // -1"
+
+  local state
+  state=$($CONFIG_TOOL "$jsonQuery" "$TURV_APPROVAL_FILE")
+
+  echo "$state"
+}
+
+_get_approval_hash() {
+  local dir="${1}"
+  local jsonQuery=".approved_dirs[\"$dir\"].hash // -1"
+
+  local hash
+  hash=$($CONFIG_TOOL "$jsonQuery" "$TURV_APPROVAL_FILE")
+
+  echo "$hash"
+}
+
+_reset_approval() {
+  local dir="${1-$PWD}"
+  local tmp_file="${TURV_APPROVAL_FILE}.tmp"
+
+  local jsonQuery="del(.approved_dirs[\"$dir\"])"
+
+  $CONFIG_TOOL "$jsonQuery" $TURV_APPROVAL_FILE
+}
+
+_check_directory_state() {
   _debug "Checking approval for directory: $PWD"
 
   # Ensure the approval file exists
-  [ ! -f "$TURV_APPROVAL_FILE" ] && _error "Approval file not found." && 106
+  [[ ! -f "$TURV_APPROVAL_FILE" ]] && _error "Approval file not found." && 106
 
-  case "$TURV_CONFIG_FORMAT" in
-  json)
-    is_approved=$(jq -e --arg dir "$PWD" '.approved_dirs[$dir].approved // "na"' "$TURV_APPROVAL_FILE" 2>/dev/null)
-    last_hash=$(jq -e --arg dir "$PWD" '.approved_dirs[$dir].hash // 0' "$TURV_APPROVAL_FILE" 2>/dev/null)
-    ;;
-  yaml | toml)
-    is_approved=$(yq eval '.approved_dirs["'"$PWD"'"].approved // "na"' "$TURV_APPROVAL_FILE" 2>/dev/null)
-    last_hash=$(yq eval '.approved_dirs["'"$PWD"'"].hash // 0' "$TURV_APPROVAL_FILE" 2>/dev/null)
-    ;;
-  *)
-    _error "Unsupported config format: $TURV_CONFIG_FORMAT"
-    return 105
-    ;;
-  esac
+  local is_approved
+  local last_hash
+
+  is_approved=$(_get_approval_state "$PWD")
+  last_hash=$(_get_approval_hash "$PWD")
 
   _debug "is_approved: $is_approved, last_hash: $last_hash"
 
-  if [[ "$is_approved" == "na" ]]; then
+  if [[ "$is_approved" == "-1" ]]; then
     _debug "Directory not found in '$TURV_APPROVAL_FILE'"
     return 10
   fi
@@ -105,30 +142,10 @@ _should_ask_to_load() {
   return 40
 }
 
-_set_dir_approval() {
-  local dir="$PWD"
-  local approval="$1"
-  local hash
-  hash=$(sha256sum "$TURV_ENV_FILE" | awk '{print $1}')
-  local tmp_file="${TURV_APPROVAL_FILE}.tmp"
-
-  case "$TURV_CONFIG_FORMAT" in
-  json)
-    jq --arg dir "$dir" --argjson approval "$approval" --arg hash "$hash" \
-      '.approved_dirs[$dir] = { "approved": $approval, "hash": $hash }' \
-      "$TURV_APPROVAL_FILE" >"$tmp_file" && mv "$tmp_file" "$TURV_APPROVAL_FILE"
-    ;;
-  yaml)
-    yq eval '.approved_dirs["'"$dir"'"] = {"approved": "'"$approval"'", "hash": "'"$hash"'"}' \
-      "$TURV_APPROVAL_FILE" >"$tmp_file" && mv "$tmp_file" "$TURV_APPROVAL_FILE"
-    ;;
-  esac
-}
-
 _prompt_for_approval() {
   if [[ -n "$TURV_ASSUME_YES" ]]; then
     _debug "Assume yes"
-    _set_dir_approval true
+    _set_approval "$PWD" true
     return 0
   fi
 
@@ -138,11 +155,11 @@ _prompt_for_approval() {
 
   case "$response" in
   [Yy]*)
-    _set_dir_approval true
+    _set_approval "$PWD" true
     return 0
     ;;
   *)
-    _set_dir_approval false
+    _set_approval "$PWD" false
     return 1
     ;;
   esac
@@ -164,7 +181,7 @@ _turv_hook() {
   fi
 
   if [[ -f "$PWD/$TURV_ENV_FILE" && -z "$TURV_ACTIVE_ENV" ]]; then
-    _should_ask_to_load
+    _check_directory_state
     local exit_code=$?
 
     _debug "_should_ask_to_load: $exit_code"
@@ -205,20 +222,10 @@ turv_load() {
 
 turv_reset_directory() {
   local dir=${1-$PWD}
-  local tmp_file="${TURV_APPROVAL_FILE}.tmp"
 
   _debug "Resetting '$dir'"
-  _debug "$TURV_APPROVAL_FILE"
-  case "$TURV_CONFIG_FORMAT" in
-  json)
-    jq --arg dir "$dir" '.approved_dirs[$dir] = {}' \
-      "$TURV_APPROVAL_FILE" >"$tmp_file" && mv "$tmp_file" "$TURV_APPROVAL_FILE"
-    ;;
-  yaml)
-    yq 'del(.approved_dirs["'"$dir"'"])' \
-      "$TURV_APPROVAL_FILE" >"$tmp_file" && mv "$tmp_file" "$TURV_APPROVAL_FILE"
-    ;;
-  esac
+
+  _reset_approval "$dir"
 }
 
 typeset -ag precmd_functions
@@ -227,5 +234,4 @@ if [[ -z ${precmd_functions[_turv_hook]} ]]; then
   precmd_functions+=_turv_hook
 fi
 
-# GistID: 87c59acf3b53cf1911bc6e3a8055afbf
 # vim: ft=bash ts=2 sts=2 sw=2 et
