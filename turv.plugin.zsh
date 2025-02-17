@@ -1,2 +1,2 @@
 0=${(%):-%N}
-source ${0:A:h}/turv.sh
+source ${0:A:h}/src/turv.sh

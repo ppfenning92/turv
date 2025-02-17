@@ -8,7 +8,7 @@ TURV_QUIET="${TURV_QUIET}"
 TURV_ASSUME_YES="${TURV_ASSUME_YES}" # if you also pipe curl to sudo shells
 TURV_VIEWER="${TURV_VIEWER:-cat}"
 
-# internal
+# Internal
 TURV_ACTIVE_ENV=""
 
 _debug() {
@@ -41,14 +41,16 @@ yaml | toml)
   ;;
 esac
 
-for cmd in "$CONFIG_TOOL" "$TURV_VIEWER"; do
+# Check that tools are available
+for cmd in "$CONFIG_TOOL" "${TURV_VIEWER%% *}"; do
   command -v "$cmd" &>/dev/null || {
     _error "Missing required command: $cmd"
     return 1
   }
 done
 
-if [[ ! -f "$TURV_APPROVAL_FILE" ]]; then
+# Test if file exists
+if [[ ! -s "$TURV_APPROVAL_FILE" ]]; then
   _debug "Approval file not found, creating it..."
   mkdir -p "$(dirname "$TURV_APPROVAL_FILE")"
 
@@ -77,7 +79,6 @@ _set_approval() {
 
   local tmp_file="${TURV_APPROVAL_FILE}.tmp"
 
-  echo "$jsonQuery"
   $CONFIG_TOOL "$jsonQuery" "$TURV_APPROVAL_FILE" \
     >"$tmp_file" && mv "$tmp_file" "$TURV_APPROVAL_FILE"
 
@@ -156,7 +157,7 @@ _prompt_for_approval() {
     return 0
   fi
 
-  bat "$PWD/$TURV_ENV_FILE" -lbash --style=snip,numbers,header
+  eval "$TURV_VIEWER $PWD/$TURV_ENV_FILE" #
   echo -n "\033[3mturv:\033[0m Source environment for \033[35;1m'$PWD'\033[0m? [y/N] "
   read -r response
 
