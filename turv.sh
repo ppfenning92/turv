@@ -1,10 +1,14 @@
 XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
+# Public API config
 TURV_CONFIG_FORMAT="${TURV_CONFIG_FORMAT:-yaml}" # Default: YAML
 TURV_APPROVAL_FILE="$XDG_STATE_HOME/turv/approved.${TURV_CONFIG_FORMAT}"
-TURV_ENV_FILE=".envrc"
-TURV_DEBUG="1"
-TURV_QUIET=""
-TURV_ASSUME_YES="" # if you also pipe curl to sudo shells
+TURV_ENV_FILE="${TURV_ENV_FILE:-.envrc}"
+TURV_DEBUG="${TURV_DEBUG}"
+TURV_QUIET="${TURV_QUIET}"
+TURV_ASSUME_YES="${TURV_ASSUME_YES}" # if you also pipe curl to sudo shells
+TURV_VIEWER="${TURV_VIEWER:-cat}"
+
+# internal
 TURV_ACTIVE_ENV=""
 
 _debug() {
@@ -37,17 +41,17 @@ yaml | toml)
   ;;
 esac
 
-for cmd in "$CONFIG_TOOL" rg bat glow; do
+for cmd in "$CONFIG_TOOL" "$TURV_VIEWER"; do
   command -v "$cmd" &>/dev/null || {
     _error "Missing required command: $cmd"
     return 1
   }
-
-  _debug "All requirements exist"
 done
 
-mkdir -p "$(dirname "$TURV_APPROVAL_FILE")"
 if [[ ! -f "$TURV_APPROVAL_FILE" ]]; then
+  _debug "Approval file not found, creating it..."
+  mkdir -p "$(dirname "$TURV_APPROVAL_FILE")"
+
   case "$TURV_CONFIG_FORMAT" in
   json) echo '{"approved_dirs": {}}' >"$TURV_APPROVAL_FILE" ;;
   yaml) echo "approved_dirs: {}" >"$TURV_APPROVAL_FILE" ;;
@@ -64,22 +68,24 @@ _call_func() {
 
 _set_approval() {
   local dir="${1}"
-  local hash="${2}"
-  local approval=${3:-"false"}
+  local approval=${2:-"false"}
+  local hash
+  hash=$(sha256sum "$TURV_ENV_FILE" | awk '{print $1}')
 
-  local state="{\"approved\": \"$approval\", \"hash\": \"$hash\"}"
+  local state="{\"approved\": "$approval", \"hash\": \"$hash\"}"
   local jsonQuery=".approved_dirs[\"$dir\"] = $state"
 
   local tmp_file="${TURV_APPROVAL_FILE}.tmp"
 
+  echo "$jsonQuery"
   $CONFIG_TOOL "$jsonQuery" "$TURV_APPROVAL_FILE" \
-    "$TURV_APPROVAL_FILE" >"$tmp_file" && mv "$tmp_file" "$TURV_APPROVAL_FILE"
+    >"$tmp_file" && mv "$tmp_file" "$TURV_APPROVAL_FILE"
 
 }
 
 _get_approval_state() {
   local dir="${1}"
-  local jsonQuery=".approved_dirs[\"$dir\"].approval // -1"
+  local jsonQuery=".approved_dirs[\"$dir\"].approved // -1"
 
   local state
   state=$($CONFIG_TOOL "$jsonQuery" "$TURV_APPROVAL_FILE")
@@ -103,7 +109,8 @@ _reset_approval() {
 
   local jsonQuery="del(.approved_dirs[\"$dir\"])"
 
-  $CONFIG_TOOL "$jsonQuery" $TURV_APPROVAL_FILE
+  $CONFIG_TOOL "$jsonQuery" "$TURV_APPROVAL_FILE" \
+    >"$tmp_file" && mv "$tmp_file" "$TURV_APPROVAL_FILE"
 }
 
 _check_directory_state() {
@@ -126,7 +133,7 @@ _check_directory_state() {
   fi
 
   # Check if directory is approved
-  if [[ "$is_approved" == "false" || -z "$is_approved" ]]; then
+  if [[ ! "$is_approved" || -z "$is_approved" ]]; then
     _print "Directory '$PWD' is not approved."
     return 20
   fi
@@ -207,6 +214,7 @@ _turv_hook() {
   fi
 }
 
+# public api
 turv_load() {
   local dir=${1-$PWD}
 
@@ -228,6 +236,7 @@ turv_reset_directory() {
   _reset_approval "$dir"
 }
 
+# zsh init
 typeset -ag precmd_functions
 
 if [[ -z ${precmd_functions[_turv_hook]} ]]; then
