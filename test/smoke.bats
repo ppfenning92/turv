@@ -13,15 +13,15 @@
 }
 
 @test "can execute with bash" {
-	/bin/bash ./src/turv.sh
+	bash ./src/turv.sh
 }
 
 @test "can execute with zsh" {
-	/bin/zsh ./src/turv.sh
+	zsh ./src/turv.sh
 }
 
 @test "can execute zsh plugin" {
-	/bin/zsh ./turv.plugin.zsh
+	zsh ./turv.plugin.zsh
 }
 
 # vim: ft=bash ts=2 sts=2 sw=2 et

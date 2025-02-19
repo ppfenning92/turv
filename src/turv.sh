@@ -1,6 +1,7 @@
+#!/usr/bin/env bash
 XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
 # Public API config
-TURV_CONFIG_FORMAT="${TURV_CONFIG_FORMAT:-yaml}" # Default: YAML
+TURV_CONFIG_FORMAT="${TURV_CONFIG_FORMAT:-json}" # Default: YAML
 TURV_APPROVAL_FILE="$XDG_STATE_HOME/turv/approved.${TURV_CONFIG_FORMAT}"
 TURV_ENV_FILE="${TURV_ENV_FILE:-.envrc}"
 TURV_DEBUG="${TURV_DEBUG}"
@@ -99,7 +100,7 @@ _get_approval_hash() {
   local jsonQuery=".approved_dirs[\"$dir\"].hash // -1"
 
   local hash
-  hash=$($CONFIG_TOOL "$jsonQuery" "$TURV_APPROVAL_FILE")
+  hash=$($CONFIG_TOOL -r "$jsonQuery" "$TURV_APPROVAL_FILE")
 
   echo "$hash"
 }
