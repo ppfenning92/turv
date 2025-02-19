@@ -29,7 +29,8 @@ Inspired by `direnv`, `autoenv`, and `dirsh`, Turv focuses on security and simpl
 To install Turv as a plugin for Oh My Zsh, run:
 
 ```sh
-git clone https://gitlab.com/patrick.pfenning.92/turv.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/turv
+# git clone https://gitlab.com/patrick.pfenning.92/turv.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/turv
+git clone https://github.com/ppfenning92/turv.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins/turv
 ```
 
 Then, add `turv` to your `.zshrc` plugins list:
