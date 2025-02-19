@@ -1,0 +1,11 @@
+extends: relaxed
+
+rules:
+  line-length: disable
+  comments:
+    min-spaces-from-content: 1
+  indentation:
+    indent-sequences: consistent
+
+ignore: |
+  templates/*
