@@ -48,7 +48,6 @@ For Bash or Zsh, add the following line to your shell configuration file:
 ```sh
 source /path/to/turv.sh
 ```
-
 Ensure that `turv` is loaded before other environment configurations. Additionally, consider adding the environment file (e.g., `.envrc`) to your global `.gitignore` to avoid committing sensitive data.
 
 ## Configuration
@@ -64,6 +63,12 @@ Turv settings can be controlled using environment variables. Add these to `~/.zs
 | `TURV_QUIET`         | unset    | Suppress log output                             |
 
 Setting `TURV_ASSUME_YES=1` allows Turv to load environment files without prompting.
+
+## Contributing
+
+Main repo on Gitlab [https://gitlab.com/patrick.pfenning.92/turv](https://gitlab.com/patrick.pfenning.92/turv)
+
+Mirror on Github [https://github.com/ppfenning92/turv](https://github.com/ppfenning92/turv)
 
 ## Attributions
 
